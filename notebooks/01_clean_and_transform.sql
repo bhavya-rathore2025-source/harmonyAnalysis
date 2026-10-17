@@ -13,29 +13,27 @@ USE main.seo_analytics;
 
 -- COMMAND ----------
 -- MAGIC %md
+-- MAGIC ### 1. Inspect Raw Data Tables
+-- MAGIC Once you upload the JSON files via 'Add or upload data' into raw_google_search and raw_bing_search:
+
+SELECT * FROM raw_google_search LIMIT 10;
+
+-- COMMAND ----------
+SELECT * FROM raw_bing_search LIMIT 10;
+
+-- COMMAND ----------
+-- MAGIC %md
 -- MAGIC ### 2. Transform & Create Google Search Silver Table (Pure SQL)
 
 CREATE OR REPLACE TABLE silver_google_search AS
-WITH raw_google AS (
-    -- Read directly from raw JSON files in Databricks Volume or DBFS
-    SELECT 
-        date,
-        query,
-        page,
-        CAST(clicks AS INT) AS clicks,
-        CAST(impressions AS INT) AS impressions,
-        CAST(ctr AS DOUBLE) AS ctr,
-        CAST(position AS DOUBLE) AS avg_position
-    FROM json.`/Volumes/main/seo_analytics/raw_files/*_gsc_raw.json`
-)
 SELECT
     TO_DATE(date, 'yyyy-MM-dd') AS date,
     LOWER(TRIM(query)) AS search_query,
     
-    -- URL Normalization: strip protocol, trailing slashes, and parameters
+    -- URL Normalization: strip protocol, trailing slashes, and query parameters
     LOWER(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(page, '^https?://', ''), '\\?.*$', ''), '/+$', '')) AS landing_page,
     
-    -- Dynamic Category Extraction: pulls the first directory segment
+    -- Dynamic Category Extraction: pulls first path segment (/4-7-8-breathing/ -> 4-7-8-breathing)
     CASE 
         WHEN REGEXP_EXTRACT(page, '^https?://[^/]+/([^/?#]+)', 1) = '' THEN 'home'
         ELSE LOWER(REGEXP_EXTRACT(page, '^https?://[^/]+/([^/?#]+)', 1))
@@ -53,11 +51,11 @@ SELECT
         ELSE 'Long-Tail'
     END AS query_length_type,
     
-    clicks,
-    impressions,
-    ctr,
-    avg_position
-FROM raw_google
+    CAST(clicks AS INT) AS clicks,
+    CAST(impressions AS INT) AS impressions,
+    CAST(ctr AS DOUBLE) AS ctr,
+    CAST(position AS DOUBLE) AS avg_position
+FROM raw_google_search
 WHERE query IS NOT NULL 
   AND impressions >= clicks;
 
@@ -66,16 +64,6 @@ WHERE query IS NOT NULL
 -- MAGIC ### 3. Transform & Create Bing Webmaster Silver Table (Pure SQL)
 
 CREATE OR REPLACE TABLE silver_bing_search AS
-WITH raw_bing AS (
-    SELECT 
-        date,
-        query,
-        CAST(clicks AS INT) AS clicks,
-        CAST(impressions AS INT) AS impressions,
-        CAST(avg_position AS DOUBLE) AS avg_position,
-        CAST(avg_ctr AS DOUBLE) AS ctr
-    FROM json.`/Volumes/main/seo_analytics/raw_files/*_bing_raw.json`
-)
 SELECT
     TO_DATE(date) AS date,
     LOWER(TRIM(query)) AS search_query,
@@ -92,11 +80,11 @@ SELECT
         ELSE 'Long-Tail'
     END AS query_length_type,
     
-    clicks,
-    impressions,
-    ctr,
-    avg_position
-FROM raw_bing
+    CAST(clicks AS INT) AS clicks,
+    CAST(impressions AS INT) AS impressions,
+    CAST(ctr AS DOUBLE) AS ctr,
+    CAST(avg_position AS DOUBLE) AS avg_position
+FROM raw_bing_search
 WHERE query IS NOT NULL;
 
 -- COMMAND ----------
