@@ -104,13 +104,16 @@ print(f"Extraction Window: {start_date} to {end_date}")
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ### 3. Google Search Console: Extract & Save to `raw_google_search`
+# MAGIC ### 3. Google Search Console: Extract 100% Traffic to `raw_google_search`
+# MAGIC Pulls revealed keywords and page-level totals, then adds rows with `query = NULL` for anonymized privacy queries.
+# MAGIC Result: A single raw table capturing 100% of website traffic with zero missing clicks.
 
 # COMMAND ----------
 SCOPES = ["https://www.googleapis.com/auth/webmasters.readonly"]
 creds = service_account.Credentials.from_service_account_info(gsc_service_account_info, scopes=SCOPES)
 service = build("searchconsole", "v1", credentials=creds)
 
+# 1. Fetch revealed queries
 request_body = {
     "startDate": start_date,
     "endDate": end_date,
@@ -123,32 +126,34 @@ response = service.searchanalytics().query(siteUrl=gsc_property, body=request_bo
 rows = response.get("rows", [])
 
 gsc_records = []
+revealed_totals = {}
+
 for r in rows:
     keys = r.get("keys", ["", "", ""])
+    dt, qry, pg = keys[0], keys[1], keys[2]
+    clk = int(r.get("clicks", 0))
+    imp = int(r.get("impressions", 0))
+    ctr = float(r.get("ctr", 0.0))
+    pos = float(r.get("position", 0.0))
+
     gsc_records.append({
-        "date": keys[0],
-        "query": keys[1],
-        "page": keys[2],
-        "clicks": int(r.get("clicks", 0)),
-        "impressions": int(r.get("impressions", 0)),
-        "ctr": float(r.get("ctr", 0.0)),
-        "position": float(r.get("position", 0.0))
+        "date": dt,
+        "query": qry,
+        "page": pg,
+        "clicks": clk,
+        "impressions": imp,
+        "ctr": ctr,
+        "position": pos
     })
 
-print(f"Extracted {len(gsc_records)} rows from Google Search Console.")
+    if (dt, pg) not in revealed_totals:
+        revealed_totals[(dt, pg)] = {"clicks": 0, "impressions": 0}
+    revealed_totals[(dt, pg)]["clicks"] += clk
+    revealed_totals[(dt, pg)]["impressions"] += imp
 
-if gsc_records:
-    df_google = spark.createDataFrame(gsc_records)
-    df_google = df_google.withColumn("ingestion_timestamp", current_timestamp())
-    df_google.write.format("delta").mode("overwrite").saveAsTable("harmony_catalog.seo_analytics.raw_google_search")
-    print("Saved keyword stream to harmony_catalog.seo_analytics.raw_google_search")
+print(f"Extracted {len(gsc_records)} revealed keyword rows.")
 
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ### 3b. Google Search Console: Stream 2 (100% Total Page Traffic - Zero Privacy Filter)
-# MAGIC Uses dimensions `["date", "page"]` without `query`. Google includes 100% of clicks and impressions (including anonymized long-tail searches).
-
-# COMMAND ----------
+# 2. Fetch 100% page totals (no privacy omission)
 request_body_pages = {
     "startDate": start_date,
     "endDate": end_date,
@@ -160,25 +165,38 @@ request_body_pages = {
 response_pages = service.searchanalytics().query(siteUrl=gsc_property, body=request_body_pages).execute()
 rows_pages = response_pages.get("rows", [])
 
-gsc_page_records = []
+# 3. Add rows with query = None (NULL in SQL) for anonymized traffic
+anonymized_count = 0
 for r in rows_pages:
     keys = r.get("keys", ["", ""])
-    gsc_page_records.append({
-        "date": keys[0],
-        "page": keys[1],
-        "clicks": int(r.get("clicks", 0)),
-        "impressions": int(r.get("impressions", 0)),
-        "ctr": float(r.get("ctr", 0.0)),
-        "position": float(r.get("position", 0.0))
-    })
+    dt, pg = keys[0], keys[1]
+    total_clk = int(r.get("clicks", 0))
+    total_imp = int(r.get("impressions", 0))
 
-print(f"Extracted {len(gsc_page_records)} page-level rows (100% traffic, zero privacy omissions).")
+    rev = revealed_totals.get((dt, pg), {"clicks": 0, "impressions": 0})
+    diff_clicks = max(0, total_clk - rev["clicks"])
+    diff_impressions = max(0, total_imp - rev["impressions"])
 
-if gsc_page_records:
-    df_google_pages = spark.createDataFrame(gsc_page_records)
-    df_google_pages = df_google_pages.withColumn("ingestion_timestamp", current_timestamp())
-    df_google_pages.write.format("delta").mode("overwrite").saveAsTable("harmony_catalog.seo_analytics.raw_google_page_totals")
-    print("Saved page totals to harmony_catalog.seo_analytics.raw_google_page_totals")
+    if diff_clicks > 0 or diff_impressions > 0:
+        gsc_records.append({
+            "date": dt,
+            "query": None,  # Explicit NULL in raw table
+            "page": pg,
+            "clicks": diff_clicks,
+            "impressions": diff_impressions,
+            "ctr": float(diff_clicks / diff_impressions) if diff_impressions > 0 else 0.0,
+            "position": float(r.get("position", 0.0))
+        })
+        anonymized_count += 1
+
+print(f"Added {anonymized_count} rows with NULL query for anonymized traffic.")
+print(f"Total rows in raw_google_search: {len(gsc_records)} (100% of website traffic).")
+
+if gsc_records:
+    df_google = spark.createDataFrame(gsc_records)
+    df_google = df_google.withColumn("ingestion_timestamp", current_timestamp())
+    df_google.write.format("delta").mode("overwrite").saveAsTable("harmony_catalog.seo_analytics.raw_google_search")
+    print("Saved 100% complete dataset to harmony_catalog.seo_analytics.raw_google_search")
 
 # COMMAND ----------
 # MAGIC %md
@@ -227,8 +245,32 @@ if bing_records:
 
 # COMMAND ----------
 # MAGIC %sql
-# MAGIC SELECT 'Raw Google (Keywords)' AS table_name, count(*) AS total_rows, sum(clicks) AS total_clicks FROM harmony_catalog.seo_analytics.raw_google_search
+# MAGIC SELECT 
+# MAGIC     'Google (Revealed Keywords)' AS metric, 
+# MAGIC     count(*) AS total_rows, 
+# MAGIC     sum(clicks) AS total_clicks,
+# MAGIC     sum(impressions) AS total_impressions 
+# MAGIC FROM harmony_catalog.seo_analytics.raw_google_search
+# MAGIC WHERE query IS NOT NULL
 # MAGIC UNION ALL
-# MAGIC SELECT 'Raw Google (Page Totals - 100%)' AS table_name, count(*) AS total_rows, sum(clicks) AS total_clicks FROM harmony_catalog.seo_analytics.raw_google_page_totals
+# MAGIC SELECT 
+# MAGIC     'Google (Anonymized / Null Query)' AS metric, 
+# MAGIC     count(*) AS total_rows, 
+# MAGIC     sum(clicks) AS total_clicks,
+# MAGIC     sum(impressions) AS total_impressions 
+# MAGIC FROM harmony_catalog.seo_analytics.raw_google_search
+# MAGIC WHERE query IS NULL
 # MAGIC UNION ALL
-# MAGIC SELECT 'Raw Bing' AS table_name, count(*) AS total_rows, sum(clicks) AS total_clicks FROM harmony_catalog.seo_analytics.raw_bing_search;
+# MAGIC SELECT 
+# MAGIC     'Google Total (100% Traffic)' AS metric, 
+# MAGIC     count(*) AS total_rows, 
+# MAGIC     sum(clicks) AS total_clicks,
+# MAGIC     sum(impressions) AS total_impressions 
+# MAGIC FROM harmony_catalog.seo_analytics.raw_google_search
+# MAGIC UNION ALL
+# MAGIC SELECT 
+# MAGIC     'Bing Total' AS metric, 
+# MAGIC     count(*) AS total_rows, 
+# MAGIC     sum(clicks) AS total_clicks,
+# MAGIC     sum(impressions) AS total_impressions 
+# MAGIC FROM harmony_catalog.seo_analytics.raw_bing_search;

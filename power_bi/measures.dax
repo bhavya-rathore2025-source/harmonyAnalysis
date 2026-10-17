@@ -4,36 +4,36 @@
 // ============================================================
 
 // ------------------------------------------------------------
-// 1. GOOGLE SEARCH METRICS (Revealed Queries & 100% Page Totals)
+// 1. GOOGLE SEARCH METRICS (100% Complete with NULL Privacy Rows)
 // ------------------------------------------------------------
 
-[Google Keyword Clicks] = 
+[Google Clicks] = 
 SUM(silver_google_search[clicks])
 
-[Google Keyword Impressions] = 
+[Google Impressions] = 
 SUM(silver_google_search[impressions])
 
-// 100% True Total Clicks (including anonymized queries) from silver_google_page_totals
-[Google True Total Clicks] = 
-SUM(silver_google_page_totals[total_clicks])
+[Google CTR] = 
+DIVIDE([Google Clicks], [Google Impressions], 0)
 
-[Google True Total Impressions] = 
-SUM(silver_google_page_totals[total_impressions])
+// Clicks from revealed keywords only
+[Google Revealed Keyword Clicks] = 
+CALCULATE([Google Clicks], NOT(ISBLANK(silver_google_search[search_query])))
 
-// The Anonymized Query Traffic Gap (Clicks hidden by Google privacy)
+// Clicks where Google hid the query due to privacy (search_query is NULL/BLANK)
 [Google Anonymized Clicks] = 
-[Google True Total Clicks] - [Google Keyword Clicks]
+CALCULATE([Google Clicks], ISBLANK(silver_google_search[search_query]))
 
 [Google Anonymized Traffic %] = 
-DIVIDE([Google Anonymized Clicks], [Google True Total Clicks], 0)
-
-[Google CTR] = 
-DIVIDE([Google True Total Clicks], [Google True Total Impressions], 0)
+DIVIDE([Google Anonymized Clicks], [Google Clicks], 0)
 
 [Google Weighted Avg Position] = 
 DIVIDE(
-    SUMX(silver_google_search, silver_google_search[impressions] * silver_google_search[avg_position]),
-    [Google Keyword Impressions],
+    SUMX(
+        FILTER(silver_google_search, NOT(ISBLANK(silver_google_search[search_query]))), 
+        silver_google_search[impressions] * silver_google_search[avg_position]
+    ),
+    CALCULATE([Google Impressions], NOT(ISBLANK(silver_google_search[search_query]))),
     BLANK()
 )
 
