@@ -1,29 +1,19 @@
 -- Databricks notebook source
 -- MAGIC %md
--- MAGIC # Databricks Silver Layer Transformations (Pure SQL)
--- MAGIC **Engine**: Spark SQL / Databricks SQL
--- MAGIC **Inputs**: Raw JSON extracts (`data/raw/*.json` or DBFS/Volume paths)
--- MAGIC **Outputs**: Delta tables `silver_google_search` and `silver_bing_search`
+-- MAGIC # 01. Clean & Transform (Silver Layer)
+-- MAGIC **Step**: 2 of 2 in Databricks Pipeline
+-- MAGIC **Inputs**: Raw tables `raw_google_search` and `raw_bing_search` (from Notebook 00)
+-- MAGIC **Outputs**: Curated Silver Delta tables `silver_google_search` and `silver_bing_search`
+-- MAGIC **Purpose**: URL canonicalization, dynamic category parsing, keyword intent classification, and data quality filtering.
 
 -- COMMAND ----------
 -- MAGIC %md
--- MAGIC ### 1. Setup Database / Schema
-CREATE SCHEMA IF NOT EXISTS main.seo_analytics;
+-- MAGIC ### 1. Set Database Context
 USE main.seo_analytics;
 
 -- COMMAND ----------
 -- MAGIC %md
--- MAGIC ### 1. Inspect Raw Data Tables
--- MAGIC Once you upload the JSON files via 'Add or upload data' into raw_google_search and raw_bing_search:
-
-SELECT * FROM raw_google_search LIMIT 10;
-
--- COMMAND ----------
-SELECT * FROM raw_bing_search LIMIT 10;
-
--- COMMAND ----------
--- MAGIC %md
--- MAGIC ### 2. Transform & Create Google Search Silver Table (Pure SQL)
+-- MAGIC ### 2. Transform Google Search Data -> silver_google_search
 
 CREATE OR REPLACE TABLE silver_google_search AS
 SELECT
@@ -61,7 +51,7 @@ WHERE query IS NOT NULL
 
 -- COMMAND ----------
 -- MAGIC %md
--- MAGIC ### 3. Transform & Create Bing Webmaster Silver Table (Pure SQL)
+-- MAGIC ### 3. Transform Bing Webmaster Data -> silver_bing_search
 
 CREATE OR REPLACE TABLE silver_bing_search AS
 SELECT
@@ -82,14 +72,24 @@ SELECT
     
     CAST(clicks AS INT) AS clicks,
     CAST(impressions AS INT) AS impressions,
-    CAST(ctr AS DOUBLE) AS ctr,
+    CAST(avg_ctr AS DOUBLE) AS ctr,
     CAST(avg_position AS DOUBLE) AS avg_position
 FROM raw_bing_search
 WHERE query IS NOT NULL;
 
 -- COMMAND ----------
 -- MAGIC %md
--- MAGIC ### 4. Verify Silver Tables
-SELECT 'Google' AS source, COUNT(*) AS row_count, SUM(clicks) AS total_clicks FROM silver_google_search
+-- MAGIC ### 4. Quality Check & Comparison
+SELECT 
+    'Google Silver' AS source, 
+    COUNT(*) AS row_count, 
+    SUM(clicks) AS total_clicks,
+    SUM(impressions) AS total_impressions 
+FROM silver_google_search
 UNION ALL
-SELECT 'Bing' AS source, COUNT(*) AS row_count, SUM(clicks) AS total_clicks FROM silver_bing_search;
+SELECT 
+    'Bing Silver' AS source, 
+    COUNT(*) AS row_count, 
+    SUM(clicks) AS total_clicks,
+    SUM(impressions) AS total_impressions 
+FROM silver_bing_search;
