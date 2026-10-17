@@ -20,7 +20,7 @@ credentials:
 
 # Databricks Table Names (Silver Layer)
 databricks:
-  catalog: "main"
+  catalog: "harmony_catalog"
   schema: "seo_analytics"
   google_table_name: "silver_google_search"
   bing_table_name: "silver_bing_search"

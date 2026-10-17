@@ -1,20 +1,15 @@
--- Databricks notebook source
--- MAGIC %md
--- MAGIC # 01. Clean & Transform (Silver Layer)
--- MAGIC **Step**: 2 of 2 in Databricks Pipeline
--- MAGIC **Inputs**: Raw tables `raw_google_search` and `raw_bing_search` (from Notebook 00)
--- MAGIC **Outputs**: Curated Silver Delta tables `silver_google_search` and `silver_bing_search`
--- MAGIC **Purpose**: URL canonicalization, dynamic category parsing, keyword intent classification, and data quality filtering.
+-- ============================================================
+-- 01. Clean & Transform (Silver Layer)
+-- Engine: Databricks SQL / Spark SQL
+-- Inputs: raw_google_search, raw_bing_search
+-- Outputs: silver_google_search, silver_bing_search
+-- ============================================================
 
--- COMMAND ----------
--- MAGIC %md
--- MAGIC ### 1. Set Database Context
-USE main.seo_analytics;
+-- 1. Set Catalog and Schema Context
+USE CATALOG harmony_catalog;
+USE SCHEMA seo_analytics;
 
--- COMMAND ----------
--- MAGIC %md
--- MAGIC ### 2. Transform Google Search Data -> silver_google_search
-
+-- 2. Transform Google Search Data -> silver_google_search
 CREATE OR REPLACE TABLE silver_google_search AS
 SELECT
     TO_DATE(date, 'yyyy-MM-dd') AS date,
@@ -49,10 +44,7 @@ FROM raw_google_search
 WHERE query IS NOT NULL 
   AND impressions >= clicks;
 
--- COMMAND ----------
--- MAGIC %md
--- MAGIC ### 3. Transform Bing Webmaster Data -> silver_bing_search
-
+-- 3. Transform Bing Webmaster Data -> silver_bing_search
 CREATE OR REPLACE TABLE silver_bing_search AS
 SELECT
     TO_DATE(date) AS date,
@@ -77,9 +69,7 @@ SELECT
 FROM raw_bing_search
 WHERE query IS NOT NULL;
 
--- COMMAND ----------
--- MAGIC %md
--- MAGIC ### 4. Quality Check & Comparison
+-- 4. Quality Check & Comparison
 SELECT 
     'Google Silver' AS source, 
     COUNT(*) AS row_count, 
