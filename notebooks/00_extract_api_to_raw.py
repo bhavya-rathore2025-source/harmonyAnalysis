@@ -31,6 +31,7 @@ spark.sql("USE SCHEMA seo_analytics")
 import json
 import os
 from datetime import date, timedelta
+from pyspark.sql.functions import current_timestamp
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import requests
@@ -140,7 +141,44 @@ if gsc_records:
     df_google = spark.createDataFrame(gsc_records)
     df_google = df_google.withColumn("ingestion_timestamp", current_timestamp())
     df_google.write.format("delta").mode("overwrite").saveAsTable("harmony_catalog.seo_analytics.raw_google_search")
-    print("Saved to harmony_catalog.seo_analytics.raw_google_search")
+    print("Saved keyword stream to harmony_catalog.seo_analytics.raw_google_search")
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ### 3b. Google Search Console: Stream 2 (100% Total Page Traffic - Zero Privacy Filter)
+# MAGIC Uses dimensions `["date", "page"]` without `query`. Google includes 100% of clicks and impressions (including anonymized long-tail searches).
+
+# COMMAND ----------
+request_body_pages = {
+    "startDate": start_date,
+    "endDate": end_date,
+    "dimensions": ["date", "page"],
+    "rowLimit": config.get("pipeline", {}).get("row_batch_limit", 25000),
+    "startRow": 0
+}
+
+response_pages = service.searchanalytics().query(siteUrl=gsc_property, body=request_body_pages).execute()
+rows_pages = response_pages.get("rows", [])
+
+gsc_page_records = []
+for r in rows_pages:
+    keys = r.get("keys", ["", ""])
+    gsc_page_records.append({
+        "date": keys[0],
+        "page": keys[1],
+        "clicks": int(r.get("clicks", 0)),
+        "impressions": int(r.get("impressions", 0)),
+        "ctr": float(r.get("ctr", 0.0)),
+        "position": float(r.get("position", 0.0))
+    })
+
+print(f"Extracted {len(gsc_page_records)} page-level rows (100% traffic, zero privacy omissions).")
+
+if gsc_page_records:
+    df_google_pages = spark.createDataFrame(gsc_page_records)
+    df_google_pages = df_google_pages.withColumn("ingestion_timestamp", current_timestamp())
+    df_google_pages.write.format("delta").mode("overwrite").saveAsTable("harmony_catalog.seo_analytics.raw_google_page_totals")
+    print("Saved page totals to harmony_catalog.seo_analytics.raw_google_page_totals")
 
 # COMMAND ----------
 # MAGIC %md
@@ -189,6 +227,8 @@ if bing_records:
 
 # COMMAND ----------
 # MAGIC %sql
-# MAGIC SELECT 'Raw Google' AS table_name, count(*) AS total_rows FROM harmony_catalog.seo_analytics.raw_google_search
+# MAGIC SELECT 'Raw Google (Keywords)' AS table_name, count(*) AS total_rows, sum(clicks) AS total_clicks FROM harmony_catalog.seo_analytics.raw_google_search
 # MAGIC UNION ALL
-# MAGIC SELECT 'Raw Bing' AS table_name, count(*) AS total_rows FROM harmony_catalog.seo_analytics.raw_bing_search;
+# MAGIC SELECT 'Raw Google (Page Totals - 100%)' AS table_name, count(*) AS total_rows, sum(clicks) AS total_clicks FROM harmony_catalog.seo_analytics.raw_google_page_totals
+# MAGIC UNION ALL
+# MAGIC SELECT 'Raw Bing' AS table_name, count(*) AS total_rows, sum(clicks) AS total_clicks FROM harmony_catalog.seo_analytics.raw_bing_search;

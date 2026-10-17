@@ -4,22 +4,36 @@
 // ============================================================
 
 // ------------------------------------------------------------
-// 1. GOOGLE SEARCH METRICS
+// 1. GOOGLE SEARCH METRICS (Revealed Queries & 100% Page Totals)
 // ------------------------------------------------------------
 
-[Google Clicks] = 
+[Google Keyword Clicks] = 
 SUM(silver_google_search[clicks])
 
-[Google Impressions] = 
+[Google Keyword Impressions] = 
 SUM(silver_google_search[impressions])
 
+// 100% True Total Clicks (including anonymized queries) from silver_google_page_totals
+[Google True Total Clicks] = 
+SUM(silver_google_page_totals[total_clicks])
+
+[Google True Total Impressions] = 
+SUM(silver_google_page_totals[total_impressions])
+
+// The Anonymized Query Traffic Gap (Clicks hidden by Google privacy)
+[Google Anonymized Clicks] = 
+[Google True Total Clicks] - [Google Keyword Clicks]
+
+[Google Anonymized Traffic %] = 
+DIVIDE([Google Anonymized Clicks], [Google True Total Clicks], 0)
+
 [Google CTR] = 
-DIVIDE([Google Clicks], [Google Impressions], 0)
+DIVIDE([Google True Total Clicks], [Google True Total Impressions], 0)
 
 [Google Weighted Avg Position] = 
 DIVIDE(
     SUMX(silver_google_search, silver_google_search[impressions] * silver_google_search[avg_position]),
-    [Google Impressions],
+    [Google Keyword Impressions],
     BLANK()
 )
 
