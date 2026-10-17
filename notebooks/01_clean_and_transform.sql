@@ -1,15 +1,24 @@
--- ============================================================
--- 01. Clean & Transform (Silver Layer)
--- Engine: Databricks SQL / Spark SQL
--- Inputs: raw_google_search, raw_bing_search
--- Outputs: silver_google_search, silver_bing_search
--- ============================================================
+-- Databricks notebook source
+-- COMMAND ----------
+-- MAGIC %md
+-- MAGIC # 01. Clean & Transform (Silver Layer)
+-- MAGIC **Inputs**: `raw_google_search`, `raw_bing_search` (from Notebook 00)  
+-- MAGIC **Outputs**: Curated Silver Delta tables `silver_google_search` and `silver_bing_search`  
+-- MAGIC **Transformations**:
+-- MAGIC - **URL Normalization**: Strips protocols (`https://`), query strings (`?utm_*`), and trailing slashes.
+-- MAGIC - **Dynamic Category Extraction**: Automatically extracts the first directory path segment.
+-- MAGIC - **Intent & Brand Tagging**: Classifies queries as Brand vs. Non-Brand and Short-Tail vs. Long-Tail.
+-- MAGIC - **Quality Filtering**: Drops rows with null queries and ensures `impressions >= clicks`.
 
--- 1. Set Catalog and Schema Context
+-- COMMAND ----------
 USE CATALOG harmony_catalog;
 USE SCHEMA seo_analytics;
 
--- 2. Transform Google Search Data -> silver_google_search
+-- COMMAND ----------
+-- MAGIC %md
+-- MAGIC ### 1. Clean & Enrich Google Search Data -> `silver_google_search`
+
+-- COMMAND ----------
 CREATE OR REPLACE TABLE silver_google_search AS
 SELECT
     TO_DATE(date, 'yyyy-MM-dd') AS date,
@@ -44,7 +53,11 @@ FROM raw_google_search
 WHERE query IS NOT NULL 
   AND impressions >= clicks;
 
--- 3. Transform Bing Webmaster Data -> silver_bing_search
+-- COMMAND ----------
+-- MAGIC %md
+-- MAGIC ### 2. Clean & Enrich Bing Webmaster Data -> `silver_bing_search`
+
+-- COMMAND ----------
 CREATE OR REPLACE TABLE silver_bing_search AS
 SELECT
     TO_DATE(date) AS date,
@@ -69,7 +82,11 @@ SELECT
 FROM raw_bing_search
 WHERE query IS NOT NULL;
 
--- 4. Quality Check & Comparison
+-- COMMAND ----------
+-- MAGIC %md
+-- MAGIC ### 3. Verification & Cross-Engine Summary
+
+-- COMMAND ----------
 SELECT 
     'Google Silver' AS source, 
     COUNT(*) AS row_count, 
