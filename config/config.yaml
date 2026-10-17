@@ -15,7 +15,7 @@ website:
 
 # API Credentials paths and keys
 credentials:
-  gsc_service_account_json: "credentials/gsc_service_account.json"
+  gsc_service_account_json: "credentials/harmony-analytics-511909-dc31b3f9c7bb.json"
   bing_api_key_env_var: "BING_API_KEY"  # Stored in environment variable or Databricks secret
 
 # Databricks Table Names (Silver Layer)

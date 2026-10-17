@@ -4,6 +4,8 @@ Fetches performance stats using the official REST API and API Key.
 Pure Python - returns raw JSON records.
 """
 from typing import List, Dict, Any
+from datetime import datetime, timezone
+import re
 import requests
 
 BING_BASE_URL = "https://ssl.bing.com/webmaster/api.svc/json"
@@ -32,8 +34,20 @@ class BingExtractor:
 
         records: List[Dict[str, Any]] = []
         for item in results:
+            raw_date = item.get("Date", "")
+            # Convert Bing Microsoft JSON date /Date(1786060800000)/ to YYYY-MM-DD
+            if "/Date(" in raw_date:
+                match = re.search(r"\d+", raw_date)
+                if match:
+                    ms = int(match.group(0))
+                    clean_date = datetime.fromtimestamp(ms / 1000.0, timezone.utc).strftime("%Y-%m-%d")
+                else:
+                    clean_date = raw_date
+            else:
+                clean_date = raw_date
+
             records.append({
-                "date": item.get("Date", ""),
+                "date": clean_date,
                 "query": item.get("Query", ""),
                 "clicks": int(item.get("Clicks", 0)),
                 "impressions": int(item.get("Impressions", 0)),

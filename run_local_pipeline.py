@@ -12,7 +12,7 @@ from src.extractors.bing_extractor import BingExtractor
 
 def run():
     print("=" * 60)
-    print("🚀 Extracting Raw Search Data (Pure Python)")
+    print(">> Extracting Raw Search Data (Pure Python)")
     print("=" * 60)
 
     config = PipelineConfig("config/config.yaml")
@@ -38,7 +38,7 @@ def run():
         print(f"  -> Extracted {len(gsc_records)} records.")
         print(f"  -> Saved raw JSON to: {gsc_out_file}")
     except Exception as e:
-        print(f"  ⚠️ GSC extract skipped or failed: {e}")
+        print(f"  [ERROR] GSC extract skipped or failed: {e}")
 
     # 2. Bing Webmaster Tools Raw Ingestion
     print("\n[2/2] Fetching Bing Webmaster Tools raw data...")
@@ -53,9 +53,9 @@ def run():
         print(f"  -> Extracted {len(bing_records)} records.")
         print(f"  -> Saved raw JSON to: {bing_out_file}")
     except Exception as e:
-        print(f"  ⚠️ Bing extract skipped or failed: {e}")
+        print(f"  [INFO] Bing extract skipped or failed: {e}")
 
-    print("\n✅ Raw extraction complete. Data is ready for Databricks SQL transformations!")
+    print("\n>> Raw extraction complete. Data is ready for Databricks SQL transformations!")
 
 if __name__ == "__main__":
     run()

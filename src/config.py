@@ -6,6 +6,16 @@ from typing import List, Dict, Any
 class PipelineConfig:
     """Loads and validates configuration from YAML file or environment variables."""
     def __init__(self, config_path: str = "config/config.yaml"):
+        # Auto-load .env if present
+        env_file = Path(".env")
+        if env_file.exists():
+            with open(env_file, "r", encoding="utf-8") as ef:
+                for line in ef:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        os.environ.setdefault(k.strip(), v.strip())
+
         self.config_path = Path(config_path)
         if not self.config_path.exists():
             raise FileNotFoundError(f"Configuration file not found at: {self.config_path}")
