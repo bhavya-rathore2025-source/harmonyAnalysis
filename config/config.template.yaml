@@ -1,0 +1,23 @@
+# Template Configuration - Copy this file to config.yaml to configure any website
+website:
+  name: "your_site_name"
+  domain: "yoursite.com"
+  gsc_property_uri: "sc-domain:yoursite.com" # or "https://yoursite.com/"
+  bing_site_url: "https://yoursite.com"
+  brand_keywords:
+    - "brand name"
+    - "brand variant"
+
+credentials:
+  gsc_service_account_json: "credentials/gsc_service_account.json"
+  bing_api_key_env_var: "BING_API_KEY"
+
+databricks:
+  catalog: "main"
+  schema: "seo_analytics"
+  google_table_name: "silver_google_search"
+  bing_table_name: "silver_bing_search"
+
+pipeline:
+  lookback_days: 30
+  row_batch_limit: 25000

@@ -1,0 +1,88 @@
+// ============================================================
+// POWER BI DAX MEASURES REPOSITORY
+// Target Tables: silver_google_search, silver_bing_search, Dim_Date
+// ============================================================
+
+// ------------------------------------------------------------
+// 1. GOOGLE SEARCH METRICS
+// ------------------------------------------------------------
+
+[Google Clicks] = 
+SUM(silver_google_search[clicks])
+
+[Google Impressions] = 
+SUM(silver_google_search[impressions])
+
+[Google CTR] = 
+DIVIDE([Google Clicks], [Google Impressions], 0)
+
+[Google Weighted Avg Position] = 
+DIVIDE(
+    SUMX(silver_google_search, silver_google_search[impressions] * silver_google_search[avg_position]),
+    [Google Impressions],
+    BLANK()
+)
+
+[Google Clicks MoM %] = 
+VAR PrevMonth = CALCULATE([Google Clicks], DATEADD(Dim_Date[Date], -1, MONTH))
+RETURN
+DIVIDE([Google Clicks] - PrevMonth, PrevMonth, 0)
+
+
+// ------------------------------------------------------------
+// 2. BING WEBMASTER METRICS
+// ------------------------------------------------------------
+
+[Bing Clicks] = 
+SUM(silver_bing_search[clicks])
+
+[Bing Impressions] = 
+SUM(silver_bing_search[impressions])
+
+[Bing CTR] = 
+DIVIDE([Bing Clicks], [Bing Impressions], 0)
+
+[Bing Weighted Avg Position] = 
+DIVIDE(
+    SUMX(silver_bing_search, silver_bing_search[impressions] * silver_bing_search[avg_position]),
+    [Bing Impressions],
+    BLANK()
+)
+
+[Bing Clicks MoM %] = 
+VAR PrevMonth = CALCULATE([Bing Clicks], DATEADD(Dim_Date[Date], -1, MONTH))
+RETURN
+DIVIDE([Bing Clicks] - PrevMonth, PrevMonth, 0)
+
+
+// ------------------------------------------------------------
+// 3. COMBINED & COMPARATIVE METRICS (HEAD-TO-HEAD)
+// ------------------------------------------------------------
+
+[Total Search Clicks] = 
+[Google Clicks] + [Bing Clicks]
+
+[Total Search Impressions] = 
+[Google Impressions] + [Bing Impressions]
+
+[Blended CTR] = 
+DIVIDE([Total Search Clicks], [Total Search Impressions], 0)
+
+[Google Click Share %] = 
+DIVIDE([Google Clicks], [Total Search Clicks], 0)
+
+[Bing Click Share %] = 
+DIVIDE([Bing Clicks], [Total Search Clicks], 0)
+
+
+// ------------------------------------------------------------
+// 4. ADVANCED SEO OPPORTUNITY INDICATOR
+// ------------------------------------------------------------
+
+// Highlights queries in "striking distance" (Page 2: positions 10-20) with high impression volume
+[Google Striking Distance Flag] = 
+IF(
+    [Google Weighted Avg Position] >= 10 && [Google Weighted Avg Position] <= 20 && [Google Impressions] > 100,
+    1,
+    0
+)

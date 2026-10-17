@@ -1,0 +1,36 @@
+# Environment & Secrets
+.env
+credentials/*.json
+!credentials/.gitkeep
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Data Files & Caches
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+*.parquet
+*.csv
+*.sqlite
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Power BI local backups
+*.pbix
+!power_bi/templates/*.pbit

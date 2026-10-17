@@ -1,0 +1,31 @@
+# Website & Brand Configuration
+website:
+  name: "harmonybreath"
+  domain: "harmonybreath.com"
+  # GSC property format can be domain (sc-domain:example.com) or URL prefix (https://example.com/)
+  gsc_property_uri: "sc-domain:harmonybreath.com"
+  bing_site_url: "https://harmonybreath.com"
+  
+  # Brand keywords for automatic Brand vs. Non-Brand classification
+  brand_keywords:
+    - "harmony"
+    - "harmony breath"
+    - "harmonybreath"
+    - "harmony breathing"
+
+# API Credentials paths and keys
+credentials:
+  gsc_service_account_json: "credentials/gsc_service_account.json"
+  bing_api_key_env_var: "BING_API_KEY"  # Stored in environment variable or Databricks secret
+
+# Databricks Table Names (Silver Layer)
+databricks:
+  catalog: "main"
+  schema: "seo_analytics"
+  google_table_name: "silver_google_search"
+  bing_table_name: "silver_bing_search"
+
+# Pipeline Settings
+pipeline:
+  lookback_days: 30       # Number of past days to extract on each run
+  row_batch_limit: 25000  # API fetch batch size
