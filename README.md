@@ -35,9 +35,8 @@ A production-grade, adaptable Data Engineering & BI project that ingests search 
 ```text
 HarmonyAnalysis/
 ├── .gitignore                    # Protects secrets (.json, .env, keys)
-├── README.md                     # Project documentation & portfolio guide
+├── README.md                     # Project documentation
 ├── requirements.txt              # Python dependencies
-├── run_local_pipeline.py         # One-command local runner for testing
 │
 ├── config/
 │   ├── config.yaml               # Active website configuration (harmonybreath.com)
@@ -46,24 +45,13 @@ HarmonyAnalysis/
 ├── credentials/                  # Local folder for GSC JSON key (git-ignored)
 │   └── .gitkeep
 │
-├── src/                          # Modular Python source code
-│   ├── config.py                 # Configuration loader
-│   ├── extractors/               # API clients
-│   │   ├── gsc_extractor.py      # Google Search Console API client
-│   │   └── bing_extractor.py     # Bing Webmaster Tools API client
-│   └── transformers/
-│       └── cleaner.py            # Dynamic URL normalizer & keyword categorizer
-│
 ├── notebooks/                    # Databricks notebooks
-│   └── 01_clean_and_transform_databricks.py # PySpark Silver transformation
+│   ├── 00_extract_api_to_raw.py  # Ingests API data to Bronze Delta tables
+│   └── 01_clean_and_transform.sql# Databricks SQL Silver transformation layer
 │
-├── power_bi/                     # Power BI artifacts & documentation
-│   ├── README.md                 # Star-schema modeling & visual layout blueprints
-│   └── measures.dax              # Production DAX measures repository
-│
-└── data/                         # Local data storage
-    ├── raw/                      # Raw JSON extracts
-    └── processed/                # Cleaned CSV/Parquet outputs
+└── power_bi/                     # Power BI artifacts & documentation
+    ├── README.md                 # Star-schema modeling & visual layout blueprints
+    └── measures.dax              # Production DAX measures repository
 ```
 
 ---
@@ -73,26 +61,19 @@ HarmonyAnalysis/
 To run this pipeline on a different website:
 1. Open [`config/config.yaml`](file:///c:/Users/MY%20PC/Documents/HarmonyAnalysis/config/config.yaml).
 2. Change the `website.name`, `website.domain`, and `brand_keywords`.
-3. The rest of the pipeline (URL parsing, keyword categorization, table naming, and Power BI DAX) automatically adapts without modifying any Python or PySpark code.
+3. Databricks and Power BI adapt to your target site settings.
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
+### 1. Credentials Setup
+- Add your Google Cloud Service Account JSON key to `credentials/`.
+- Add your Bing API Key to Databricks Secrets or `.env`.
 
-### 2. Add Credentials
-- Download your Google Cloud Service Account JSON key to `credentials/gsc_service_account.json`.
-- Set your Bing API Key in your environment (`set BING_API_KEY=your_key`) or inside `config/config.yaml`.
+### 2. Run in Databricks
+1. Run [`notebooks/00_extract_api_to_raw.py`](file:///c:/Users/MY%20PC/Documents/HarmonyAnalysis/notebooks/00_extract_api_to_raw.py) to ingest API data into Bronze Delta tables.
+2. Run [`notebooks/01_clean_and_transform.sql`](file:///c:/Users/MY%20PC/Documents/HarmonyAnalysis/notebooks/01_clean_and_transform.sql) to clean and transform into Silver Delta tables.
 
-### 3. Run Pipeline Locally
-```bash
-python run_local_pipeline.py
-```
-Outputs will be generated in `data/processed/silver_google_search.csv` and `data/processed/silver_bing_search.csv`.
-
-### 4. Open in Power BI
-Follow the instructions in [`power_bi/README.md`](file:///c:/Users/MY%20PC/Documents/HarmonyAnalysis/power_bi/README.md) to link the shared date table and load the DAX measures from [`power_bi/measures.dax`](file:///c:/Users/MY%20PC/Documents/HarmonyAnalysis/power_bi/measures.dax).
+### 3. Open in Power BI
+Follow the instructions in [`power_bi/README.md`](file:///c:/Users/MY%20PC/Documents/HarmonyAnalysis/power_bi/README.md) to connect to Databricks and load the DAX measures from [`power_bi/measures.dax`](file:///c:/Users/MY%20PC/Documents/HarmonyAnalysis/power_bi/measures.dax).
