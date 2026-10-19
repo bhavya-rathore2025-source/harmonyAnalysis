@@ -1,5 +1,4 @@
 -- Databricks notebook source
--- COMMAND ----------
 -- MAGIC %md
 -- MAGIC # 01. Clean & Transform (Silver Layer)
 -- MAGIC **Inputs**: `raw_google_search` (includes revealed queries + NULL query for anonymized traffic), `raw_bing_search`  
@@ -11,88 +10,71 @@
 -- MAGIC - **Preserves NULL Queries**: Retains private/anonymized traffic with `search_query = NULL` so 100% of clicks are captured without double counting.
 
 -- COMMAND ----------
+
 USE CATALOG harmony_catalog;
 USE SCHEMA seo_analytics;
 
 -- COMMAND ----------
+
+select * from harmony_catalog.seo_analytics.raw_google_search limit 100
+
+-- COMMAND ----------
+
 -- MAGIC %md
 -- MAGIC ### 1. Clean & Enrich Google Search Data -> `silver_google_search`
 
 -- COMMAND ----------
-CREATE OR REPLACE TABLE silver_google_search AS
-SELECT
-    TO_DATE(date, 'yyyy-MM-dd') AS date,
-    
-    -- Preserve NULL query for anonymized privacy traffic, clean string if present
-    CASE 
-        WHEN query IS NOT NULL THEN LOWER(TRIM(query)) 
-        ELSE NULL 
-    END AS search_query,
-    
-    -- URL Normalization: strip protocol, trailing slashes, and query parameters
-    LOWER(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(page, '^https?://', ''), '\\?.*$', ''), '/+$', '')) AS landing_page,
-    
-    -- Dynamic Category Extraction: pulls first path segment (/4-7-8-breathing/ -> 4-7-8-breathing)
-    CASE 
-        WHEN REGEXP_EXTRACT(page, '^https?://[^/]+/([^/?#]+)', 1) = '' THEN 'home'
-        ELSE LOWER(REGEXP_EXTRACT(page, '^https?://[^/]+/([^/?#]+)', 1))
-    END AS page_category,
-    
-    -- Brand vs. Non-Brand Classification
-    CASE 
-        WHEN query IS NULL THEN 'Non-Brand'
-        WHEN LOWER(query) LIKE '%harmony%' THEN 'Brand'
-        ELSE 'Non-Brand'
-    END AS brand_type,
-    
-    -- Short-tail vs. Long-tail Classification
-    CASE 
-        WHEN query IS NULL THEN 'Unknown'
-        WHEN SIZE(SPLIT(TRIM(query), ' ')) <= 2 THEN 'Short-Tail'
-        ELSE 'Long-Tail'
-    END AS query_length_type,
-    
-    CAST(clicks AS INT) AS clicks,
-    CAST(impressions AS INT) AS impressions,
-    CAST(ctr AS DOUBLE) AS ctr,
-    CAST(position AS DOUBLE) AS avg_position
-FROM raw_google_search
-WHERE impressions >= clicks;
+
+-- MAGIC %python
+-- MAGIC from pyspark.sql.functions import expr,col
+-- MAGIC google_df= spark.table("harmony_catalog.seo_analytics.raw_google_search")
+-- MAGIC google_df.limit(100).display()
+-- MAGIC updated_google_df =( google_df
+-- MAGIC .withColumn(
+-- MAGIC     'page', 
+-- MAGIC     expr("COALESCE(NULLIF(replace(page, 'https://harmonybreath.com/', ''), ''), '/')")
+-- MAGIC )
+-- MAGIC .withColumns({
+-- MAGIC     'language': expr("""
+-- MAGIC         CASE
+-- MAGIC             WHEN split(page, '/')[0] IN ('es', 'de', 'fr', 'it', 'pt', 'ja')
+-- MAGIC             THEN split(page, '/')[0]
+-- MAGIC             ELSE 'en'
+-- MAGIC         END
+-- MAGIC     """),
+-- MAGIC     'technique': expr("""
+-- MAGIC         CASE
+-- MAGIC             WHEN split(page, '/')[0] IN ('es', 'de', 'fr', 'it', 'pt', 'ja')
+-- MAGIC             THEN get(split(page, '/'), 1)
+-- MAGIC             ELSE get(split(page, '/'), 0)
+-- MAGIC         END
+-- MAGIC     """)}).drop("ctr","ingestion_timestamp"))
+-- MAGIC updated_google_df.limit(100).display()
+-- MAGIC
+-- MAGIC updated_google_df.write.mode("overwrite").saveAsTable("harmony_catalog.seo_analytics.silver_google_search")
+-- MAGIC
 
 -- COMMAND ----------
+
+select * from harmony_catalog.seo_analytics.silver_google_search
+where page=="es/"
+
+-- COMMAND ----------
+
 -- MAGIC %md
 -- MAGIC ### 2. Clean & Enrich Bing Webmaster Data -> `silver_bing_search`
 
 -- COMMAND ----------
-CREATE OR REPLACE TABLE silver_bing_search AS
-SELECT
-    TO_DATE(date) AS date,
-    LOWER(TRIM(query)) AS search_query,
-    
-    -- Brand vs. Non-Brand Classification
-    CASE 
-        WHEN LOWER(query) LIKE '%harmony%' THEN 'Brand'
-        ELSE 'Non-Brand'
-    END AS brand_type,
-    
-    -- Short-tail vs. Long-tail Classification
-    CASE 
-        WHEN SIZE(SPLIT(TRIM(query), ' ')) <= 2 THEN 'Short-Tail'
-        ELSE 'Long-Tail'
-    END AS query_length_type,
-    
-    CAST(clicks AS INT) AS clicks,
-    CAST(impressions AS INT) AS impressions,
-    CAST(avg_ctr AS DOUBLE) AS ctr,
-    CAST(avg_position AS DOUBLE) AS avg_position
-FROM raw_bing_search
-WHERE query IS NOT NULL;
+
+select * from harmony_catalog.seo_analytics.raw_bing_search limit 300
 
 -- COMMAND ----------
+
 -- MAGIC %md
 -- MAGIC ### 3. Verification & Summary
 
 -- COMMAND ----------
+
 SELECT 
     'Google (Revealed Keywords)' AS metric, 
     COUNT(*) AS row_count, 

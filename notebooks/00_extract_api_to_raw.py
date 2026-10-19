@@ -1,5 +1,8 @@
 # Databricks notebook source
-# COMMAND ----------
+# /// script
+# [tool.databricks.environment]
+# environment_version = "6"
+# ///
 # MAGIC %md
 # MAGIC # 00. Extract API Data to Raw Tables (Bronze Ingestion)
 # MAGIC **Execution Environment**: 100% Databricks (Cloud Cluster)  
@@ -9,25 +12,30 @@
 # MAGIC **Schedule**: Suitable for daily automated Databricks Workflows (Jobs)
 
 # COMMAND ----------
+
 # MAGIC %pip install google-api-python-client google-auth requests pyyaml --quiet
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ### 1. Initialize Catalog & Schema Context
 
 # COMMAND ----------
-# Create catalog and schema using Spark SQL
-spark.sql("CREATE CATALOG IF NOT EXISTS harmony_catalog")
-spark.sql("USE CATALOG harmony_catalog")
-spark.sql("CREATE SCHEMA IF NOT EXISTS seo_analytics")
-spark.sql("USE SCHEMA seo_analytics")
+
+# MAGIC %sql
+# MAGIC CREATE CATALOG IF NOT EXISTS harmony_catalog;
+# MAGIC USE CATALOG harmony_catalog;
+# MAGIC CREATE SCHEMA IF NOT EXISTS seo_analytics;
+# MAGIC USE SCHEMA seo_analytics;
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ### 2. Configuration & Secrets Retrieval
 # MAGIC Retrieves API credentials securely from Databricks Secrets with graceful fallback.
 
 # COMMAND ----------
+
 import json
 import os
 from datetime import date, timedelta
@@ -103,12 +111,14 @@ print(f"Target Site: {site_name}")
 print(f"Extraction Window: {start_date} to {end_date}")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ### 3. Google Search Console: Extract 100% Traffic to `raw_google_search`
 # MAGIC Pulls revealed keywords and page-level totals, then adds rows with `query = NULL` for anonymized privacy queries.
 # MAGIC Result: A single raw table capturing 100% of website traffic with zero missing clicks.
 
 # COMMAND ----------
+
 SCOPES = ["https://www.googleapis.com/auth/webmasters.readonly"]
 creds = service_account.Credentials.from_service_account_info(gsc_service_account_info, scopes=SCOPES)
 service = build("searchconsole", "v1", credentials=creds)
@@ -199,10 +209,12 @@ if gsc_records:
     print("Saved 100% complete dataset to harmony_catalog.seo_analytics.raw_google_search")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ### 4. Bing Webmaster Tools: Extract & Save to `raw_bing_search`
 
 # COMMAND ----------
+
 from datetime import datetime, timezone
 import re
 
@@ -230,7 +242,7 @@ for item in bing_items:
         "avg_position": float(item.get("AvgPosition", 0.0)),
         "avg_ctr": float(item.get("Ctr", 0.0))
     })
-
+print(bing_items)
 print(f"Extracted {len(bing_records)} rows from Bing Webmaster Tools.")
 
 if bing_records:
@@ -240,10 +252,12 @@ if bing_records:
     print("Saved to harmony_catalog.seo_analytics.raw_bing_search")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ### 5. Verify Raw Tables Ingestion
 
 # COMMAND ----------
+
 # MAGIC %sql
 # MAGIC SELECT 
 # MAGIC     'Google (Revealed Keywords)' AS metric, 
@@ -274,3 +288,9 @@ if bing_records:
 # MAGIC     sum(clicks) AS total_clicks,
 # MAGIC     sum(impressions) AS total_impressions 
 # MAGIC FROM harmony_catalog.seo_analytics.raw_bing_search;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from harmony_catalog.seo_analytics.raw_google_search
+# MAGIC
