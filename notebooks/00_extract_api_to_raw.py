@@ -8,7 +8,7 @@
 # MAGIC **Execution Environment**: 100% Databricks (Cloud Cluster)  
 # MAGIC **Inputs**: Google Search Console API & Bing Webmaster Tools API  
 # MAGIC **Secrets**: Databricks Secrets (`dbutils.secrets.get`)  
-# MAGIC **Outputs**: Delta tables `harmony_catalog.seo_analytics.raw_google_search` and `harmony_catalog.seo_analytics.raw_bing_search`  
+# MAGIC **Outputs**: Delta tables `harmony_catalog.seo_analytics.raw_google_search`, `harmony_catalog.seo_analytics.raw_bing_search` (Queries), and `harmony_catalog.seo_analytics.raw_bing_page_search` (Pages)  
 # MAGIC **Schedule**: Suitable for daily automated Databricks Workflows (Jobs)
 
 # COMMAND ----------
@@ -211,45 +211,83 @@ if gsc_records:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 4. Bing Webmaster Tools: Extract & Save to `raw_bing_search`
+# MAGIC ### 4. Bing Webmaster Tools: Extract & Save to `raw_bing_search` (Queries) & `raw_bing_page_search` (Pages)
 
 # COMMAND ----------
 
 from datetime import datetime, timezone
 import re
 
-bing_endpoint = "https://ssl.bing.com/webmaster/api.svc/json/GetQueryStats"
-bing_params = {"siteUrl": bing_site_url, "apikey": bing_api_key}
-
-bing_res = requests.get(bing_endpoint, params=bing_params, timeout=30)
-bing_res.raise_for_status()
-bing_items = bing_res.json().get("d", [])
-
-bing_records = []
-for item in bing_items:
-    raw_date = item.get("Date", "")
+def parse_bing_date(raw_date):
     if "/Date(" in raw_date:
         match = re.search(r"\d+", raw_date)
-        clean_date = datetime.fromtimestamp(int(match.group(0)) / 1000.0, timezone.utc).strftime("%Y-%m-%d") if match else raw_date
-    else:
-        clean_date = raw_date
+        return datetime.fromtimestamp(int(match.group(0)) / 1000.0, timezone.utc).strftime("%Y-%m-%d") if match else raw_date
+    return raw_date
+
+# 1. Fetch Bing Query Statistics (Keyword Level)
+bing_query_endpoint = "https://ssl.bing.com/webmaster/api.svc/json/GetQueryStats"
+bing_params = {"siteUrl": bing_site_url, "apikey": bing_api_key}
+
+bing_query_res = requests.get(bing_query_endpoint, params=bing_params, timeout=30)
+bing_query_res.raise_for_status()
+bing_query_items = bing_query_res.json().get("d", [])
+
+bing_records = []
+for item in bing_query_items:
+    clean_date = parse_bing_date(item.get("Date", ""))
+    clicks = int(item.get("Clicks", 0))
+    impressions = int(item.get("Impressions", 0))
+    ctr = float(item.get("Ctr", 0.0) or (clicks / impressions if impressions > 0 else 0.0))
+    avg_pos = float(item.get("AvgPosition", item.get("AvgImpressionPosition", 0.0)) or 0.0)
 
     bing_records.append({
         "date": clean_date,
         "query": item.get("Query", ""),
-        "clicks": int(item.get("Clicks", 0)),
-        "impressions": int(item.get("Impressions", 0)),
-        "avg_position": float(item.get("AvgPosition", 0.0)),
-        "avg_ctr": float(item.get("Ctr", 0.0))
+        "clicks": clicks,
+        "impressions": impressions,
+        "avg_position": avg_pos,
+        "avg_ctr": ctr
     })
-print(bing_items)
-print(f"Extracted {len(bing_records)} rows from Bing Webmaster Tools.")
+
+print(f"Extracted {len(bing_records)} query rows from Bing Webmaster Tools.")
 
 if bing_records:
     df_bing = spark.createDataFrame(bing_records)
     df_bing = df_bing.withColumn("ingestion_timestamp", current_timestamp())
     df_bing.write.format("delta").mode("overwrite").saveAsTable("harmony_catalog.seo_analytics.raw_bing_search")
     print("Saved to harmony_catalog.seo_analytics.raw_bing_search")
+
+# 2. Fetch Bing Page Statistics (URL Level)
+bing_page_endpoint = "https://ssl.bing.com/webmaster/api.svc/json/GetPageStats"
+bing_page_res = requests.get(bing_page_endpoint, params=bing_params, timeout=30)
+bing_page_res.raise_for_status()
+bing_page_items = bing_page_res.json().get("d", [])
+
+bing_page_records = []
+for item in bing_page_items:
+    clean_date = parse_bing_date(item.get("Date", ""))
+    page_url = item.get("Query") or item.get("Page") or ""
+    clicks = int(item.get("Clicks", 0))
+    impressions = int(item.get("Impressions", 0))
+    ctr = float(item.get("Ctr", 0.0) or (clicks / impressions if impressions > 0 else 0.0))
+    avg_pos = float(item.get("AvgImpressionPosition", item.get("AvgPosition", 0.0)) or 0.0)
+
+    bing_page_records.append({
+        "date": clean_date,
+        "page": page_url,
+        "clicks": clicks,
+        "impressions": impressions,
+        "avg_position": avg_pos,
+        "avg_ctr": ctr
+    })
+
+print(f"Extracted {len(bing_page_records)} page rows from Bing Webmaster Tools.")
+
+if bing_page_records:
+    df_bing_page = spark.createDataFrame(bing_page_records)
+    df_bing_page = df_bing_page.withColumn("ingestion_timestamp", current_timestamp())
+    df_bing_page.write.format("delta").mode("overwrite").saveAsTable("harmony_catalog.seo_analytics.raw_bing_page_search")
+    print("Saved to harmony_catalog.seo_analytics.raw_bing_page_search")
 
 # COMMAND ----------
 
@@ -283,11 +321,18 @@ if bing_records:
 # MAGIC FROM harmony_catalog.seo_analytics.raw_google_search
 # MAGIC UNION ALL
 # MAGIC SELECT 
-# MAGIC     'Bing Total' AS metric, 
+# MAGIC     'Bing (Queries)' AS metric, 
 # MAGIC     count(*) AS total_rows, 
 # MAGIC     sum(clicks) AS total_clicks,
 # MAGIC     sum(impressions) AS total_impressions 
-# MAGIC FROM harmony_catalog.seo_analytics.raw_bing_search;
+# MAGIC FROM harmony_catalog.seo_analytics.raw_bing_search
+# MAGIC UNION ALL
+# MAGIC SELECT 
+# MAGIC     'Bing (Pages)' AS metric, 
+# MAGIC     count(*) AS total_rows, 
+# MAGIC     sum(clicks) AS total_clicks,
+# MAGIC     sum(impressions) AS total_impressions 
+# MAGIC FROM harmony_catalog.seo_analytics.raw_bing_page_search;
 
 # COMMAND ----------
 

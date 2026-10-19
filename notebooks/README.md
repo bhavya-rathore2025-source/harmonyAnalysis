@@ -8,7 +8,7 @@ This directory contains pure SQL scripts for the Databricks Lakehouse processing
 
 ### Objective
 - Ingest raw JSON extracts from GSC and Bing without transformations.
-- Create Delta tables: `raw_google_search` and `raw_bing_search`.
+- Create Delta tables: `raw_google_search`, `raw_bing_search` (Bing Queries), and `raw_bing_page_search` (Bing Pages).
 - Add an `ingestion_timestamp` column for lineage and auditability.
 
 ### Catalog & Schema Setup
