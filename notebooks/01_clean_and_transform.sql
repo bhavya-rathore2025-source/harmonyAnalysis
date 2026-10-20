@@ -56,51 +56,57 @@ select * from harmony_catalog.seo_analytics.raw_google_search limit 100
 
 -- COMMAND ----------
 
-select * from harmony_catalog.seo_analytics.silver_google_search
-where page=="es/"
-
--- COMMAND ----------
-
 -- MAGIC %md
 -- MAGIC ### 2. Clean & Enrich Bing Webmaster Data -> `silver_bing_search`
 
 -- COMMAND ----------
 
-select * from harmony_catalog.seo_analytics.raw_bing_search limit 300
+select * from harmony_catalog.seo_analytics.raw_bing_page_search limit 100
 
 -- COMMAND ----------
 
--- MAGIC %md
--- MAGIC ### 3. Verification & Summary
+-- MAGIC %python
+-- MAGIC from pyspark.sql.functions import expr
+-- MAGIC bing_page_df= spark.table('harmony_catalog.seo_analytics.raw_bing_page_search')
+-- MAGIC updated_bing_page_df= (
+-- MAGIC     bing_page_df.withColumn("page", expr("COALESCE(NULLIF(parse_url(page, 'PATH'), ''), '/')"))
+-- MAGIC .withColumns({
+-- MAGIC     'language': expr("""
+-- MAGIC         CASE
+-- MAGIC             WHEN split(page, '/')[1] IN ('es', 'de', 'fr', 'it', 'pt', 'ja')
+-- MAGIC             THEN split(page, '/')[1]
+-- MAGIC             ELSE 'en'
+-- MAGIC         END
+-- MAGIC     """),
+-- MAGIC     'technique': expr("""
+-- MAGIC         CASE
+-- MAGIC             WHEN split(page, '/')[1] IN ('es', 'de', 'fr', 'it', 'pt', 'ja')
+-- MAGIC             THEN get(split(page, '/'), 2)
+-- MAGIC             ELSE get(split(page, '/'), 1)
+-- MAGIC         END
+-- MAGIC     """)}
+-- MAGIC ))
+-- MAGIC
+-- MAGIC updated_bing_page_df.write.mode('overwrite').saveAsTable("harmony_catalog.seo_analytics.silver_bing_page_search")
+-- MAGIC
+-- MAGIC bing_search_df= spark.table("harmony_catalog.seo_analytics.raw_bing_search")
+-- MAGIC bing_search_df.write.mode('overwrite').saveAsTable("harmony_catalog.seo_analytics.silver_bing_search")
 
 -- COMMAND ----------
 
-SELECT 
-    'Google (Revealed Keywords)' AS metric, 
-    COUNT(*) AS row_count, 
-    SUM(clicks) AS total_clicks,
-    SUM(impressions) AS total_impressions 
-FROM silver_google_search
-WHERE search_query IS NOT NULL
-UNION ALL
-SELECT 
-    'Google (Anonymized / NULL Query)' AS metric, 
-    COUNT(*) AS row_count, 
-    SUM(clicks) AS total_clicks,
-    SUM(impressions) AS total_impressions 
-FROM silver_google_search
-WHERE search_query IS NULL
-UNION ALL
-SELECT 
-    'Google Total (100% Traffic)' AS metric, 
-    COUNT(*) AS row_count, 
-    SUM(clicks) AS total_clicks,
-    SUM(impressions) AS total_impressions 
-FROM silver_google_search
-UNION ALL
-SELECT 
-    'Bing Total' AS metric, 
-    COUNT(*) AS row_count, 
-    SUM(clicks) AS total_clicks,
-    SUM(impressions) AS total_impressions 
-FROM silver_bing_search;
+create or replace table harmony_catalog.seo_analytics.bing_latest_page
+SELECT * 
+FROM harmony_catalog.seo_analytics.silver_bing_page_search
+WHERE date = (SELECT MAX(date) FROM harmony_catalog.seo_analytics.silver_bing_page_search);
+create or replace table harmony_catalog.seo_analytics.bing_latest
+SELECT * 
+FROM harmony_catalog.seo_analytics.silver_bing_search
+WHERE date = (SELECT MAX(date) FROM harmony_catalog.seo_analytics.silver_bing_search);
+create or replace table harmony_catalog.seo_analytics.google_latest
+SELECT * 
+FROM harmony_catalog.seo_analytics.silver_google_search
+WHERE date = (SELECT MAX(date) FROM harmony_catalog.seo_analytics.silver_google_search);
+
+-- COMMAND ----------
+
+select * from harmony_catalog.seo_analytics.google_latest

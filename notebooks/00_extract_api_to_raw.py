@@ -237,7 +237,6 @@ for item in bing_query_items:
     clean_date = parse_bing_date(item.get("Date", ""))
     clicks = int(item.get("Clicks", 0))
     impressions = int(item.get("Impressions", 0))
-    ctr = float(item.get("Ctr", 0.0) or (clicks / impressions if impressions > 0 else 0.0))
     avg_pos = float(item.get("AvgPosition", item.get("AvgImpressionPosition", 0.0)) or 0.0)
 
     bing_records.append({
@@ -246,7 +245,7 @@ for item in bing_query_items:
         "clicks": clicks,
         "impressions": impressions,
         "avg_position": avg_pos,
-        "avg_ctr": ctr
+
     })
 
 print(f"Extracted {len(bing_records)} query rows from Bing Webmaster Tools.")
@@ -269,7 +268,7 @@ for item in bing_page_items:
     page_url = item.get("Query") or item.get("Page") or ""
     clicks = int(item.get("Clicks", 0))
     impressions = int(item.get("Impressions", 0))
-    ctr = float(item.get("Ctr", 0.0) or (clicks / impressions if impressions > 0 else 0.0))
+   
     avg_pos = float(item.get("AvgImpressionPosition", item.get("AvgPosition", 0.0)) or 0.0)
 
     bing_page_records.append({
@@ -277,8 +276,7 @@ for item in bing_page_items:
         "page": page_url,
         "clicks": clicks,
         "impressions": impressions,
-        "avg_position": avg_pos,
-        "avg_ctr": ctr
+        "avg_position": avg_pos
     })
 
 print(f"Extracted {len(bing_page_records)} page rows from Bing Webmaster Tools.")
@@ -331,11 +329,12 @@ if bing_page_records:
 # MAGIC     'Bing (Pages)' AS metric, 
 # MAGIC     count(*) AS total_rows, 
 # MAGIC     sum(clicks) AS total_clicks,
-# MAGIC     sum(impressions) AS total_impressions 
+# MAGIC     sum(impressions) AS total_impressions
 # MAGIC FROM harmony_catalog.seo_analytics.raw_bing_page_search;
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC select * from harmony_catalog.seo_analytics.raw_google_search
+# MAGIC select * from harmony_catalog.seo_analytics.raw_bing_page_search;
+# MAGIC select * from  harmony_catalog.seo_analytics.raw_bing_search;
 # MAGIC
