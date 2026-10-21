@@ -86,10 +86,11 @@ select * from harmony_catalog.seo_analytics.raw_bing_page_search limit 100
 -- MAGIC         END
 -- MAGIC     """)}
 -- MAGIC ))
--- MAGIC
+-- MAGIC updated_bing_page_df= updated_bing_page_df.drop("ingestion_timestamp")
 -- MAGIC updated_bing_page_df.write.mode('overwrite').saveAsTable("harmony_catalog.seo_analytics.silver_bing_page_search")
 -- MAGIC
 -- MAGIC bing_search_df= spark.table("harmony_catalog.seo_analytics.raw_bing_search")
+-- MAGIC bing_search_df=bing_search_df.drop("ingestion_timestamp")
 -- MAGIC bing_search_df.write.mode('overwrite').saveAsTable("harmony_catalog.seo_analytics.silver_bing_search")
 
 -- COMMAND ----------
@@ -109,4 +110,3 @@ WHERE date = (SELECT MAX(date) FROM harmony_catalog.seo_analytics.silver_google_
 
 -- COMMAND ----------
 
-select * from harmony_catalog.seo_analytics.google_latest
