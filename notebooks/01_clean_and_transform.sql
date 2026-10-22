@@ -27,6 +27,7 @@ select * from harmony_catalog.seo_analytics.raw_google_search limit 100
 
 -- MAGIC %python
 -- MAGIC from pyspark.sql.functions import expr,col
+-- MAGIC from delta.tables import DeltaTable
 -- MAGIC google_df= spark.table("harmony_catalog.seo_analytics.raw_google_search")
 -- MAGIC google_df.limit(100).display()
 -- MAGIC updated_google_df =( google_df
@@ -51,8 +52,19 @@ select * from harmony_catalog.seo_analytics.raw_google_search limit 100
 -- MAGIC     """)}).drop("ctr","ingestion_timestamp"))
 -- MAGIC updated_google_df.limit(100).display()
 -- MAGIC
--- MAGIC updated_google_df.write.mode("overwrite").saveAsTable("harmony_catalog.seo_analytics.silver_google_search")
--- MAGIC
+-- MAGIC silver_google_table = "harmony_catalog.seo_analytics.silver_google_search"
+-- MAGIC if not spark.catalog.tableExists(silver_google_table):
+-- MAGIC     updated_google_df.write.format("delta").saveAsTable(silver_google_table)
+-- MAGIC else:
+-- MAGIC     delta_silver_google = DeltaTable.forName(spark, silver_google_table)
+-- MAGIC     delta_silver_google.alias("tgt").merge(
+-- MAGIC         updated_google_df.dropDuplicates(["date", "page", "query"]).alias("src"),
+-- MAGIC         """
+-- MAGIC         tgt.date = src.date AND 
+-- MAGIC         tgt.page = src.page AND 
+-- MAGIC         (tgt.query = src.query OR (tgt.query IS NULL AND src.query IS NULL))
+-- MAGIC         """
+-- MAGIC     ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
 
 -- COMMAND ----------
 
@@ -87,11 +99,29 @@ select * from harmony_catalog.seo_analytics.raw_bing_page_search limit 100
 -- MAGIC     """)}
 -- MAGIC ))
 -- MAGIC updated_bing_page_df= updated_bing_page_df.drop("ingestion_timestamp")
--- MAGIC updated_bing_page_df.write.mode('overwrite').saveAsTable("harmony_catalog.seo_analytics.silver_bing_page_search")
+-- MAGIC
+-- MAGIC silver_bing_page_table = "harmony_catalog.seo_analytics.silver_bing_page_search"
+-- MAGIC if not spark.catalog.tableExists(silver_bing_page_table):
+-- MAGIC     updated_bing_page_df.write.format("delta").saveAsTable(silver_bing_page_table)
+-- MAGIC else:
+-- MAGIC     delta_bing_page = DeltaTable.forName(spark, silver_bing_page_table)
+-- MAGIC     delta_bing_page.alias("tgt").merge(
+-- MAGIC         updated_bing_page_df.dropDuplicates(["date", "page"]).alias("src"),
+-- MAGIC         "tgt.date = src.date AND tgt.page = src.page"
+-- MAGIC     ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
 -- MAGIC
 -- MAGIC bing_search_df= spark.table("harmony_catalog.seo_analytics.raw_bing_search")
 -- MAGIC bing_search_df=bing_search_df.drop("ingestion_timestamp")
--- MAGIC bing_search_df.write.mode('overwrite').saveAsTable("harmony_catalog.seo_analytics.silver_bing_search")
+-- MAGIC
+-- MAGIC silver_bing_search_table = "harmony_catalog.seo_analytics.silver_bing_search"
+-- MAGIC if not spark.catalog.tableExists(silver_bing_search_table):
+-- MAGIC     bing_search_df.write.format("delta").saveAsTable(silver_bing_search_table)
+-- MAGIC else:
+-- MAGIC     delta_bing_search = DeltaTable.forName(spark, silver_bing_search_table)
+-- MAGIC     delta_bing_search.alias("tgt").merge(
+-- MAGIC         bing_search_df.dropDuplicates(["date", "query"]).alias("src"),
+-- MAGIC         "tgt.date = src.date AND tgt.query = src.query"
+-- MAGIC     ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
 
 -- COMMAND ----------
 
