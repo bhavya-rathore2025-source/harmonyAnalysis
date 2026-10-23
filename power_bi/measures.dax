@@ -146,3 +146,48 @@ SUM(bing_latest_page[clicks])
 
 [Latest Bing Impressions] = 
 SUM(bing_latest_page[impressions])
+
+
+// ============================================================
+// 7. TECHNIQUE POPULARITY & RANKING MEASURES
+// Equivalent SQL:
+// SELECT technique, COUNT(*) AS cnt 
+// FROM silver_google_search 
+// GROUP BY technique 
+// ORDER BY cnt DESC LIMIT 1;
+// ============================================================
+
+// 1. Most Popular Technique (Name)
+[Most Popular Technique Name] = 
+VAR SummaryTable = 
+    FILTER(
+        SUMMARIZE(
+            silver_google_search,
+            silver_google_search[technique],
+            "TechniqueCount", COUNTROWS(silver_google_search)
+        ),
+        NOT(ISBLANK(silver_google_search[technique])) && silver_google_search[technique] <> ""
+    )
+VAR Top1 = 
+    TOPN(1, SummaryTable, [TechniqueCount], DESC)
+RETURN
+    MAXX(Top1, silver_google_search[technique])
+
+
+// 2. Most Popular Technique (Number / Count)
+[Most Popular Technique Count] = 
+VAR SummaryTable = 
+    FILTER(
+        SUMMARIZE(
+            silver_google_search,
+            silver_google_search[technique],
+            "TechniqueCount", COUNTROWS(silver_google_search)
+        ),
+        NOT(ISBLANK(silver_google_search[technique])) && silver_google_search[technique] <> ""
+    )
+VAR Top1 = 
+    TOPN(1, SummaryTable, [TechniqueCount], DESC)
+RETURN
+    MAXX(Top1, [TechniqueCount])
+
+

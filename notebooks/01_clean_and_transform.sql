@@ -26,8 +26,16 @@ select * from harmony_catalog.seo_analytics.raw_google_search limit 100
 -- COMMAND ----------
 
 -- MAGIC %python
+-- MAGIC import os, yaml
 -- MAGIC from pyspark.sql.functions import expr,col
 -- MAGIC from delta.tables import DeltaTable
+-- MAGIC
+-- MAGIC lookback_days = 64
+-- MAGIC config_path = "../config/config.yaml"
+-- MAGIC if os.path.exists(config_path):
+-- MAGIC     with open(config_path, "r", encoding="utf-8") as f:
+-- MAGIC         lookback_days = yaml.safe_load(f).get("pipeline", {}).get("lookback_days", 64)
+-- MAGIC
 -- MAGIC google_df= spark.table("harmony_catalog.seo_analytics.raw_google_search")
 -- MAGIC google_df.limit(100).display()
 -- MAGIC updated_google_df =( google_df
@@ -53,8 +61,9 @@ select * from harmony_catalog.seo_analytics.raw_google_search limit 100
 -- MAGIC updated_google_df.limit(100).display()
 -- MAGIC
 -- MAGIC silver_google_table = "harmony_catalog.seo_analytics.silver_google_search"
--- MAGIC if not spark.catalog.tableExists(silver_google_table):
--- MAGIC     updated_google_df.write.format("delta").saveAsTable(silver_google_table)
+-- MAGIC if lookback_days > 7 or not spark.catalog.tableExists(silver_google_table):
+-- MAGIC     updated_google_df.dropDuplicates(["date", "page", "query"]).write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(silver_google_table)
+-- MAGIC     print(f"Overwrote {silver_google_table} (lookback_days = {lookback_days} > 7)")
 -- MAGIC else:
 -- MAGIC     delta_silver_google = DeltaTable.forName(spark, silver_google_table)
 -- MAGIC     delta_silver_google.alias("tgt").merge(
@@ -65,6 +74,9 @@ select * from harmony_catalog.seo_analytics.raw_google_search limit 100
 -- MAGIC         (tgt.query = src.query OR (tgt.query IS NULL AND src.query IS NULL))
 -- MAGIC         """
 -- MAGIC     ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+-- MAGIC     print(f"Merged into {silver_google_table}")
+
+
 
 -- COMMAND ----------
 
@@ -101,27 +113,32 @@ select * from harmony_catalog.seo_analytics.raw_bing_page_search limit 100
 -- MAGIC updated_bing_page_df= updated_bing_page_df.drop("ingestion_timestamp")
 -- MAGIC
 -- MAGIC silver_bing_page_table = "harmony_catalog.seo_analytics.silver_bing_page_search"
--- MAGIC if not spark.catalog.tableExists(silver_bing_page_table):
--- MAGIC     updated_bing_page_df.write.format("delta").saveAsTable(silver_bing_page_table)
+-- MAGIC if lookback_days > 7 or not spark.catalog.tableExists(silver_bing_page_table):
+-- MAGIC     updated_bing_page_df.dropDuplicates(["date", "page"]).write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(silver_bing_page_table)
+-- MAGIC     print(f"Overwrote {silver_bing_page_table} (lookback_days = {lookback_days} > 7)")
 -- MAGIC else:
 -- MAGIC     delta_bing_page = DeltaTable.forName(spark, silver_bing_page_table)
 -- MAGIC     delta_bing_page.alias("tgt").merge(
 -- MAGIC         updated_bing_page_df.dropDuplicates(["date", "page"]).alias("src"),
 -- MAGIC         "tgt.date = src.date AND tgt.page = src.page"
 -- MAGIC     ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+-- MAGIC     print(f"Merged into {silver_bing_page_table}")
 -- MAGIC
 -- MAGIC bing_search_df= spark.table("harmony_catalog.seo_analytics.raw_bing_search")
 -- MAGIC bing_search_df=bing_search_df.drop("ingestion_timestamp")
 -- MAGIC
 -- MAGIC silver_bing_search_table = "harmony_catalog.seo_analytics.silver_bing_search"
--- MAGIC if not spark.catalog.tableExists(silver_bing_search_table):
--- MAGIC     bing_search_df.write.format("delta").saveAsTable(silver_bing_search_table)
+-- MAGIC if lookback_days > 7 or not spark.catalog.tableExists(silver_bing_search_table):
+-- MAGIC     bing_search_df.dropDuplicates(["date", "query"]).write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(silver_bing_search_table)
+-- MAGIC     print(f"Overwrote {silver_bing_search_table} (lookback_days = {lookback_days} > 7)")
 -- MAGIC else:
 -- MAGIC     delta_bing_search = DeltaTable.forName(spark, silver_bing_search_table)
 -- MAGIC     delta_bing_search.alias("tgt").merge(
 -- MAGIC         bing_search_df.dropDuplicates(["date", "query"]).alias("src"),
 -- MAGIC         "tgt.date = src.date AND tgt.query = src.query"
 -- MAGIC     ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+-- MAGIC     print(f"Merged into {silver_bing_search_table}")
+
 
 -- COMMAND ----------
 

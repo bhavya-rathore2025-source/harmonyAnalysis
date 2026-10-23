@@ -53,7 +53,7 @@ with open("../config/config.yaml", "r", encoding="utf-8") as f:
 site_name = config["website"]["name"]
 gsc_property = config["website"]["gsc_property_uri"]
 bing_site_url = config["website"]["bing_site_url"]
-lookback_days = config.get("pipeline", {}).get("lookback_days", 30)
+lookback_days = config.get("pipeline", {}).get("lookback_days", 64)
 
 # Retrieve credentials: Check workspace file first, then Secrets, then Environment Variables
 SECRET_SCOPE = "seo_secrets"
@@ -209,8 +209,9 @@ if gsc_records:
     df_google = df_google.dropDuplicates(["date", "page", "query"])
     
     raw_google_table = "harmony_catalog.seo_analytics.raw_google_search"
-    if not spark.catalog.tableExists(raw_google_table):
-        df_google.write.format("delta").saveAsTable(raw_google_table)
+    if lookback_days > 7 or not spark.catalog.tableExists(raw_google_table):
+        df_google.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(raw_google_table)
+        print(f"Overwrote {raw_google_table} (lookback_days = {lookback_days} > 7)")
     else:
         delta_google = DeltaTable.forName(spark, raw_google_table)
         delta_google.alias("tgt").merge(
@@ -221,7 +222,7 @@ if gsc_records:
             (tgt.query = src.query OR (tgt.query IS NULL AND src.query IS NULL))
             """
         ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
-    print("Merged 100% complete dataset into harmony_catalog.seo_analytics.raw_google_search")
+        print(f"Merged into {raw_google_table}")
 
 # COMMAND ----------
 
@@ -271,15 +272,16 @@ if bing_records:
     df_bing = df_bing.dropDuplicates(["date", "query"])
     
     raw_bing_table = "harmony_catalog.seo_analytics.raw_bing_search"
-    if not spark.catalog.tableExists(raw_bing_table):
-        df_bing.write.format("delta").saveAsTable(raw_bing_table)
+    if lookback_days > 7 or not spark.catalog.tableExists(raw_bing_table):
+        df_bing.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(raw_bing_table)
+        print(f"Overwrote {raw_bing_table} (lookback_days = {lookback_days} > 7)")
     else:
         delta_bing = DeltaTable.forName(spark, raw_bing_table)
         delta_bing.alias("tgt").merge(
             df_bing.alias("src"),
             "tgt.date = src.date AND tgt.query = src.query"
         ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
-    print("Merged into harmony_catalog.seo_analytics.raw_bing_search")
+        print(f"Merged into {raw_bing_table}")
 
 # 2. Fetch Bing Page Statistics (URL Level)
 bing_page_endpoint = "https://ssl.bing.com/webmaster/api.svc/json/GetPageStats"
@@ -312,15 +314,16 @@ if bing_page_records:
     df_bing_page = df_bing_page.dropDuplicates(["date", "page"])
     
     raw_bing_page_table = "harmony_catalog.seo_analytics.raw_bing_page_search"
-    if not spark.catalog.tableExists(raw_bing_page_table):
-        df_bing_page.write.format("delta").saveAsTable(raw_bing_page_table)
+    if lookback_days > 7 or not spark.catalog.tableExists(raw_bing_page_table):
+        df_bing_page.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(raw_bing_page_table)
+        print(f"Overwrote {raw_bing_page_table} (lookback_days = {lookback_days} > 7)")
     else:
         delta_bing_page = DeltaTable.forName(spark, raw_bing_page_table)
         delta_bing_page.alias("tgt").merge(
             df_bing_page.alias("src"),
             "tgt.date = src.date AND tgt.page = src.page"
         ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
-    print("Merged into harmony_catalog.seo_analytics.raw_bing_page_search")
+        print(f"Merged into {raw_bing_page_table}")
 
 # COMMAND ----------
 

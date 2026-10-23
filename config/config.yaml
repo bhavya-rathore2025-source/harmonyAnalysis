@@ -27,5 +27,6 @@ databricks:
 
 # Pipeline Settings
 pipeline:
-  lookback_days: 7        # Rolling 7 days for daily incremental runs (safe with Delta MERGE)
+  lookback_days: 64       # Changed from 7 to 64 for full historical refresh
   row_batch_limit: 25000  # API fetch batch size
+
